@@ -77,6 +77,7 @@ A detection rule that "looks correct" and a detection rule that actually fires a
 ## Files in this repo
 
 - `wazuh_detection_evidence.json` — the real alert record from the live Hydra-triggered detection, including `firedtimes`, source IP, and MITRE mapping
+- `sudo_privesc_detection_evidence.json` — the real alert record from the live privilege-escalation detection (see addendum below)
 - `screenshots/` — see below
 
 ## Screenshots
@@ -84,9 +85,49 @@ A detection rule that "looks correct" and a detection rule that actually fires a
 ![Rule validation via wazuh-logtest](screenshots/rule-validation.png)
 ![Corrected detection rule configuration](screenshots/local-rules-config.png)
 ![Live alert in the Wazuh dashboard](screenshots/dashboard-alert.png)
+![Sudo/privilege-escalation rule validation](screenshots/sudo-rule-validation.png)
+![Updated rules file with both detections](screenshots/local-rules-config-v2.png)
+![Live privilege-escalation alert confirmation](screenshots/live-alert-confirmation.png)
 
 ## What I'd do differently in production
 
 - Test every custom rule with `wazuh-logtest` as a standing first step, not a fallback after a live test fails — it would have caught both bugs here in minutes instead of after a full attack run.
 - Tune Hydra's thread count to stay under whatever SSH rate-limiting is in place *before* the first attempt, rather than discovering the limit via a failed run.
-- Extend this rule set to cover other MITRE-mapped techniques relevant to this lab (e.g., privilege escalation attempts, unusual sudo activity) rather than stopping at one validated rule.
+
+---
+
+## Addendum: A Second Detection Rule — Repeated Failed `sudo`/PAM Authentication (T1548)
+
+### What this adds
+
+A second, independently validated detection rule watching for repeated failed privilege-escalation attempts (`sudo`/PAM authentication failures) — demonstrating that the first rule's validated methodology (write → `wazuh-logtest` → live-fire confirm) is a repeatable process, not a one-off.
+
+### The rule
+
+```xml
+<rule id="100011" level="10" frequency="3" timeframe="120">
+  <if_matched_sid>5503</if_matched_sid>
+  <description>Repeated failed sudo/PAM authentication - possible privilege escalation attempt (T1548)</description>
+  <mitre>
+    <id>T1548</id>
+  </mitre>
+</rule>
+```
+
+Deliberately does **not** use `<same_source_ip />` — unlike an SSH login, a local `sudo` failure carries no source IP at all, so reusing that tag from the first rule without checking would have silently broken the frequency grouping.
+
+### The debugging arc — a real, multi-layered one
+
+**1. A fabricated test line validated against the wrong rule entirely.** The initial test line used to check `wazuh-logtest` was written by hand to look plausible, rather than pulled from real `auth.log` output. It happened to decode to rule `5404` — a real Wazuh rule, just not the one this system's actual `sudo` failures ever produce. Built and "validated" against it, the new rule would have silently never fired against genuine traffic.
+
+**2. Caught by checking the real log directly, not trusting the synthetic line.** Comparing the fabricated test line against actual `auth.log` output from a real failed-`sudo` attempt showed they didn't match at all. The real line — `pam_unix(sudo:auth): authentication failure; ...` — decodes to a completely different base rule: `5503`.
+
+**3. Removing the wrong rule broke the entire manager.** A `sed`-based deletion intended to remove the rule built against `5404` left an orphaned, empty `<group>...</group>` block behind — valid-looking XML that Wazuh's rule parser correctly rejected (`"Group 'group' without any rule"`), taking the whole `wazuh-manager` service down.
+
+**4. Fixed by inspecting the actual file content, not guessing at the damage.** Viewing the full `local_rules.xml` directly showed the exact empty block; a second, precise deletion removed only that fragment, and the manager came back up clean.
+
+**5. Re-validated against the real log line, then confirmed live.** With the rule correctly built against `5503`, `wazuh-logtest` confirmed it firing on the third submission of the real log line. A genuine live test — three real failed `sudo` authentication attempts — triggered rule `100011` for real, captured in `sudo_privesc_detection_evidence.json`.
+
+### Key finding
+
+Every one of the first rule's lessons (validate before attacking, don't assume a base rule ID) held up as generally correct — but this rule's own process surfaced a further, more subtle version of the same failure mode: a synthetic test input can pass validation while still being validated against the *wrong thing*. The fix isn't "trust `wazuh-logtest`" — it's "trust `wazuh-logtest` run against genuinely real data," which is a meaningfully stricter standard than it first appears.
