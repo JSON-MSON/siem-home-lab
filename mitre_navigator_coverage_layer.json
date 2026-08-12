@@ -1,0 +1,145 @@
+{
+	"name": "siem-home-lab Detection Coverage",
+	"versions": {
+		"attack": "19",
+		"navigator": "5.3.2",
+		"layer": "4.5"
+	},
+	"domain": "enterprise-attack",
+	"description": "Techniques actively detected by custom Wazuh rules in this lab, verified against live rule IDs. Not a threat model or gap analysis — coverage only.",
+	"filters": {
+		"platforms": [
+			"Windows",
+			"IaaS",
+			"Linux",
+			"macOS",
+			"SaaS",
+			"ESXi",
+			"Network Devices",
+			"PRE",
+			"Containers",
+			"Office Suite",
+			"Identity Provider"
+		]
+	},
+	"sorting": 0,
+	"layout": {
+		"layout": "side",
+		"aggregateFunction": "average",
+		"showID": false,
+		"showName": true,
+		"showAggregateScores": false,
+		"countUnscored": false,
+		"expandedSubtechniques": "none"
+	},
+	"hideDisabled": false,
+	"techniques": [
+		{
+			"techniqueID": "T1110",
+			"tactic": "credential-access",
+			"color": "#31a354",
+			"comment": "Detected by Wazuh custom rule 100010 (base SID 5760), confirmed via live Hydra brute-force attack against SSH.",
+			"enabled": true,
+			"metadata": [],
+			"links": [],
+			"showSubtechniques": false
+		},
+		{
+			"techniqueID": "T1548",
+			"tactic": "privilege-escalation",
+			"color": "#31a354",
+			"comment": "Detected by Wazuh custom rule 100011 (base SID 5503), confirmed via repeated failed sudo/PAM authentication triggering the rule live.",
+			"enabled": true,
+			"metadata": [],
+			"links": [],
+			"showSubtechniques": false
+		},
+		{
+			"techniqueID": "T1685.006",
+			"tactic": "defense-impairment",
+			"color": "#fd8d3c",
+			"comment": "Roadmap — not yet built. Planned: Wazuh FIM watching /var/log/auth.log for tampering/clearing. Directly prepares for incident-02. Note: reissued as T1685.006 (Disable or Modify Tools) under ATT&CK v19's Defense Impairment tactic, formerly T1070.002 under Defense Evasion.",
+			"enabled": true,
+			"metadata": [],
+			"links": [],
+			"showSubtechniques": false
+		},
+		{
+			"techniqueID": "T1078",
+			"tactic": "initial-access",
+			"color": "#fd8d3c",
+			"comment": "Roadmap — not yet built. Planned: detect successful auth immediately following a failed-attempt streak, or off-hours login timing — different rule logic than rule 100010's frequency threshold.",
+			"enabled": true,
+			"metadata": [],
+			"links": [],
+			"showSubtechniques": false
+		},
+		{
+			"techniqueID": "T1078",
+			"tactic": "persistence",
+			"color": "#fd8d3c",
+			"comment": "Roadmap — not yet built. Planned: detect successful auth immediately following a failed-attempt streak, or off-hours login timing — different rule logic than rule 100010's frequency threshold.",
+			"enabled": true,
+			"metadata": [],
+			"links": [],
+			"showSubtechniques": false
+		},
+		{
+			"techniqueID": "T1078",
+			"tactic": "privilege-escalation",
+			"color": "#fd8d3c",
+			"comment": "Roadmap — not yet built. Planned: detect successful auth immediately following a failed-attempt streak, or off-hours login timing — different rule logic than rule 100010's frequency threshold.",
+			"enabled": true,
+			"metadata": [],
+			"links": [],
+			"showSubtechniques": false
+		},
+		{
+			"techniqueID": "T1078",
+			"tactic": "stealth",
+			"color": "#fd8d3c",
+			"comment": "Roadmap — not yet built. Planned: detect successful auth immediately following a failed-attempt streak, or off-hours login timing — different rule logic than rule 100010's frequency threshold.",
+			"enabled": true,
+			"metadata": [],
+			"links": [],
+			"showSubtechniques": false
+		},
+		{
+			"techniqueID": "T1098",
+			"tactic": "persistence",
+			"color": "#fd8d3c",
+			"comment": "Roadmap — not yet built. Planned: detect Linux-side group membership changes (e.g. usermod -aG sudo) via auth.log — Linux-side counterpart to incident-01's Windows-side finding.",
+			"enabled": true,
+			"metadata": [],
+			"links": [],
+			"showSubtechniques": false
+		},
+		{
+			"techniqueID": "T1098",
+			"tactic": "privilege-escalation",
+			"color": "#fd8d3c",
+			"comment": "Roadmap — not yet built. Planned: detect Linux-side group membership changes (e.g. usermod -aG sudo) via auth.log — Linux-side counterpart to incident-01's Windows-side finding.",
+			"enabled": true,
+			"metadata": [],
+			"links": [],
+			"showSubtechniques": false
+		}
+	],
+	"gradient": {
+		"colors": [
+			"#ff6666ff",
+			"#ffe766ff",
+			"#8ec843ff"
+		],
+		"minValue": 0,
+		"maxValue": 100
+	},
+	"legendItems": [],
+	"metadata": [],
+	"links": [],
+	"showTacticRowBackground": false,
+	"tacticRowBackground": "#dddddd",
+	"selectTechniquesAcrossTactics": true,
+	"selectSubtechniquesWithParent": false,
+	"selectVisibleTechniques": false
+}

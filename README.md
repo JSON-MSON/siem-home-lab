@@ -78,6 +78,7 @@ A detection rule that "looks correct" and a detection rule that actually fires a
 
 - `wazuh_detection_evidence.json` — the real alert record from the live Hydra-triggered detection, including `firedtimes`, source IP, and MITRE mapping
 - `sudo_privesc_detection_evidence.json` — the real alert record from the live privilege-escalation detection (see addendum below)
+- `mitre_navigator_coverage_layer.json` — exported MITRE ATT&CK Navigator layer covering both confirmed detections plus a curated set of planned next detections, each with a citation comment (see addendum below)
 - `screenshots/` — see below
 
 ## Screenshots
@@ -88,6 +89,7 @@ A detection rule that "looks correct" and a detection rule that actually fires a
 ![Sudo/privilege-escalation rule validation](screenshots/sudo-rule-validation.png)
 ![Updated rules file with both detections](screenshots/local-rules-config-v2.png)
 ![Live privilege-escalation alert confirmation](screenshots/live-alert-confirmation.png)
+![MITRE ATT&CK Navigator coverage and roadmap heatmap](screenshots/mitre-navigator-coverage-heatmap.png)
 
 ## What I'd do differently in production
 
@@ -131,3 +133,36 @@ Deliberately does **not** use `<same_source_ip />` — unlike an SSH login, a lo
 ### Key finding
 
 Every one of the first rule's lessons (validate before attacking, don't assume a base rule ID) held up as generally correct — but this rule's own process surfaced a further, more subtle version of the same failure mode: a synthetic test input can pass validation while still being validated against the *wrong thing*. The fix isn't "trust `wazuh-logtest`" — it's "trust `wazuh-logtest` run against genuinely real data," which is a meaningfully stricter standard than it first appears.
+
+---
+
+## Addendum: MITRE ATT&CK Navigator Detection Coverage Layer
+
+### What this adds
+
+A portable, re-usable coverage layer mapping this lab's real, validated detections onto the industry-standard ATT&CK framework — the same visual language analysts and hiring managers use to communicate coverage at a glance, distinct from citing a technique ID inside a rule's own XML. Paired with a small, deliberately curated "planned next" layer showing where detection coverage goes from here.
+
+### Coverage layer — what's actually detected
+
+Two techniques, each backed by a specific rule ID and a live-fire confirmation already documented above, not by assertion:
+
+| Technique | Rule | Confirmed via |
+|---|---|---|
+| T1110 — Brute Force | 100010 (base SID 5760) | live Hydra SSH brute-force attack |
+| T1548 — Abuse Elevation Control Mechanism | 100011 (base SID 5503) | live repeated failed sudo/PAM attempts |
+
+### A real framework-version finding along the way
+
+Building the layer surfaced a genuine, current ATT&CK change: version 19 (released April 2026) split the former "Defense Evasion" tactic into two new tactics, Stealth and Defense Impairment. One of the roadmap techniques below — clearing system logs — was revoked from its old ID (T1070.002, under the old Defense Evasion framing) and reissued as **T1685.006 ("Disable or Modify Tools: Clear Linux or Mac System Logs")** under the new Defense Impairment tactic. The reframing is meaningful, not just a renumbering: MITRE's rationale is that clearing logs isn't just about *evading* detection while defenses keep running — it's about *actively degrading* a defensive control. That's a more accurate description of what a Wazuh FIM rule watching for log tampering would actually be catching.
+
+### Roadmap layer — honest, infrastructure-grounded next steps
+
+Rather than a blanket "gap analysis" against the full ATT&CK matrix — which every home lab trivially fails and which proves nothing on its own — the layer marks three specific techniques chosen because they're detectable using log sources Wazuh already ingests from this host, with no new infrastructure required:
+
+- **T1685.006 — Clear Linux or Mac System Logs.** Planned: Wazuh File Integrity Monitoring watching `/var/log/auth.log` for tampering or unexpected truncation.
+- **T1078 — Valid Accounts.** Planned: detect a successful authentication immediately following a failed-attempt streak, or authentication at unusual hours — different rule logic than rule 100010's frequency-threshold approach to the same log source.
+- **T1098 — Account Manipulation.** Planned: detect Linux-side group membership changes (e.g. `usermod -aG sudo`) via `auth.log`.
+
+### Key finding
+
+A coverage layer alone shows what's proven. Pairing it with a small, deliberately curated set of "planned next" techniques — grounded in what the existing log sources can actually support, not a generic wishlist — turns the same artifact into a prioritization tool: an honest answer to "what would you build next, and why," rather than just a scorecard of what's already done. The layer is also a living artifact by design — as new rules get added, it gets reopened and extended rather than rebuilt from scratch.
