@@ -79,6 +79,7 @@ A detection rule that "looks correct" and a detection rule that actually fires a
 - `wazuh_detection_evidence.json` — the real alert record from the live Hydra-triggered detection, including `firedtimes`, source IP, and MITRE mapping
 - `sudo_privesc_detection_evidence.json` — the real alert record from the live privilege-escalation detection (see addendum below)
 - `mitre_navigator_coverage_layer.json` — exported MITRE ATT&CK Navigator layer covering both confirmed detections plus a curated set of planned next detections, each with a citation comment (see addendum below)
+- `wazuh_dashboard_saved_objects.ndjson` — exported OpenSearch Dashboards saved-objects file for the custom detection dashboard, re-importable into any Wazuh instance (see addendum below)
 - `screenshots/` — see below
 
 ## Screenshots
@@ -90,6 +91,7 @@ A detection rule that "looks correct" and a detection rule that actually fires a
 ![Updated rules file with both detections](screenshots/local-rules-config-v2.png)
 ![Live privilege-escalation alert confirmation](screenshots/live-alert-confirmation.png)
 ![MITRE ATT&CK Navigator coverage and roadmap heatmap](screenshots/mitre-navigator-coverage-heatmap.png)
+![Custom Wazuh dashboard: alert volume and source IP panels](screenshots/wazuh-custom-dashboard.png)
 
 ## What I'd do differently in production
 
@@ -166,3 +168,25 @@ Rather than a blanket "gap analysis" against the full ATT&CK matrix — which ev
 ### Key finding
 
 A coverage layer alone shows what's proven. Pairing it with a small, deliberately curated set of "planned next" techniques — grounded in what the existing log sources can actually support, not a generic wishlist — turns the same artifact into a prioritization tool: an honest answer to "what would you build next, and why," rather than just a scorecard of what's already done. The layer is also a living artifact by design — as new rules get added, it gets reopened and extended rather than rebuilt from scratch.
+
+---
+
+## Addendum: Custom Wazuh Dashboard Panels
+
+### What this adds
+
+Two custom visualization panels, hand-built directly in the Wazuh dashboard's own visualization builder (OpenSearch Dashboards) and combined into a single saved dashboard — the literal daily task of working inside a live SIEM's UI tooling, using genuinely live alert data this lab's own rules already produced, not a synthetic dataset.
+
+### The panels
+
+**Alert Volume Over Time** — a vertical bar chart, filtered to `rule.id:(100010 OR 100011)`, bucketed on `@timestamp` via a date histogram. Deliberately scoped to July 20 – August 1, 2026, matching this repo's own documented attack window. A separate, later live-fire SSH brute-force run — built for a different portfolio piece, against a different target account — also happens to trip rule 100010, and including it would have made this panel's totals diverge from the counts already documented earlier in this README. Excluding it was a deliberate scoping decision, not an oversight.
+
+**Top Source IPs by Alert Count** — a data table, using a Terms aggregation on `data.srcip` with "show missing values" enabled. Result: `192.168.81.128` with 23 hits, plus a `Missing` row with 1 hit.
+
+### A real finding: what the "Missing" count actually means
+
+The `sudo`/PAM rule (100011) carries no source-IP field by design — a local privilege-escalation attempt has no remote source address to log — so it was expected to land in the `Missing` bucket rather than under an IP. What needed a second look was the count itself: `Missing` shows **1**, not the 3 individual failed attempts documented in the addendum above. That's not a discrepancy — rule 100011 has `frequency="3"`, meaning it evaluates a *threshold* being crossed and emits exactly one alert document when it's met, not one alert per underlying failed attempt. The three real failures are the trigger condition; the alert is the single, resulting record. Total across both panels: 23 + 1 = 24 alert documents, which is exactly correct once counted this way.
+
+### Key finding
+
+A functioning custom dashboard built entirely from real, live alert data — evidence of working inside an actual SIEM's visualization tooling, not just its rule engine. Building it also surfaced two things worth being deliberate about with real data: cross-project alert data can silently bleed into a filtered view if the time range isn't scoped carefully, and a frequency-based rule's alert count reflects *triggered thresholds*, not *raw events* — a distinction that matters when reconciling a dashboard's numbers against a written incident record.
