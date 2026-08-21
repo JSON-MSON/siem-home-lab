@@ -57,8 +57,8 @@
 		{
 			"techniqueID": "T1685.006",
 			"tactic": "defense-impairment",
-			"color": "#fd8d3c",
-			"comment": "Roadmap — not yet built. Planned: Wazuh FIM watching /var/log/auth.log for tampering/clearing. Directly prepares for incident-02. Note: reissued as T1685.006 (Disable or Modify Tools) under ATT&CK v19's Defense Impairment tactic, formerly T1070.002 under Defense Evasion.",
+			"color": "#31a354",
+			"comment": "Detected by Wazuh FIM rule 550, confirmed via live detection during the real authentication-log-tampering incident (incident-02) — full before/after hashes and syscheck.diff of the destroyed content captured. Reissued as T1685.006 (Disable or Modify Tools: Clear Linux or Mac System Logs) under ATT&CK v19's Defense Impairment tactic, formerly T1070.002 under Defense Evasion.",
 			"enabled": true,
 			"metadata": [],
 			"links": [],
