@@ -56,10 +56,14 @@ A live Hydra run produced 206 alert hits, but none of them were the custom rule 
 
 ### 5. Validate the fix directly, before re-attacking
 
+![Corrected detection rule configuration](screenshots/local-rules-config.png)
+
 ```bash
 sudo /var/ossec/bin/wazuh-logtest
 ```
 The same sample line, submitted four times (matching the `frequency="4"` threshold), correctly fired rule `100010` on the fourth submission — confirmed via the tool's own output, independent of any live network traffic.
+
+![Rule validation via wazuh-logtest](screenshots/rule-validation.png)
 
 ### 6. Confirm with a real attack
 
@@ -69,6 +73,8 @@ hydra -t 4 -l codemane1 -P /usr/share/wordlists/rockyou.txt ssh://192.168.81.130
 (`-t 4` limits parallel connections — OpenSSH's own `PerSourcePenalties` defense started dropping connections from the attacker under Hydra's default 16-thread setting, a real SSH hardening feature worth noting in its own right.)
 
 Result: rule `100010` fired 23 times against the real attack traffic, correctly attributing the source IP (`192.168.81.128`) and citing MITRE technique T1110.
+
+![Live alert in the Wazuh dashboard](screenshots/dashboard-alert.png)
 
 ## Key finding
 
@@ -80,18 +86,7 @@ A detection rule that "looks correct" and a detection rule that actually fires a
 - `sudo_privesc_detection_evidence.json` — the real alert record from the live privilege-escalation detection (see addendum below)
 - `mitre_navigator_coverage_layer.json` — exported MITRE ATT&CK Navigator layer covering both confirmed detections plus a curated set of planned next detections, each with a citation comment (see addendum below)
 - `wazuh_dashboard_saved_objects.ndjson` — exported OpenSearch Dashboards saved-objects file for the custom detection dashboard, re-importable into any Wazuh instance (see addendum below)
-- `screenshots/` — see below
-
-## Screenshots
-
-![Rule validation via wazuh-logtest](screenshots/rule-validation.png)
-![Corrected detection rule configuration](screenshots/local-rules-config.png)
-![Live alert in the Wazuh dashboard](screenshots/dashboard-alert.png)
-![Sudo/privilege-escalation rule validation](screenshots/sudo-rule-validation.png)
-![Updated rules file with both detections](screenshots/local-rules-config-v2.png)
-![Live privilege-escalation alert confirmation](screenshots/live-alert-confirmation.png)
-![MITRE ATT&CK Navigator coverage and roadmap heatmap](screenshots/mitre-navigator-coverage-heatmap.png)
-![Custom Wazuh dashboard: alert volume and source IP panels](screenshots/wazuh-custom-dashboard.png)
+- `screenshots/` — terminal and dashboard captures, placed inline throughout this README next to the step each one documents, rather than grouped separately
 
 ## What I'd do differently in production
 
@@ -120,6 +115,8 @@ A second, independently validated detection rule watching for repeated failed pr
 
 Deliberately does **not** use `<same_source_ip />` — unlike an SSH login, a local `sudo` failure carries no source IP at all, so reusing that tag from the first rule without checking would have silently broken the frequency grouping.
 
+![Updated rules file with both detections](screenshots/local-rules-config-v2.png)
+
 ### The debugging arc — a real, multi-layered one
 
 **1. A fabricated test line validated against the wrong rule entirely.** The initial test line used to check `wazuh-logtest` was written by hand to look plausible, rather than pulled from real `auth.log` output. It happened to decode to rule `5404` — a real Wazuh rule, just not the one this system's actual `sudo` failures ever produce. Built and "validated" against it, the new rule would have silently never fired against genuine traffic.
@@ -130,7 +127,13 @@ Deliberately does **not** use `<same_source_ip />` — unlike an SSH login, a lo
 
 **4. Fixed by inspecting the actual file content, not guessing at the damage.** Viewing the full `local_rules.xml` directly showed the exact empty block; a second, precise deletion removed only that fragment, and the manager came back up clean.
 
-**5. Re-validated against the real log line, then confirmed live.** With the rule correctly built against `5503`, `wazuh-logtest` confirmed it firing on the third submission of the real log line. A genuine live test — three real failed `sudo` authentication attempts — triggered rule `100011` for real, captured in `sudo_privesc_detection_evidence.json`.
+**5. Re-validated against the real log line, then confirmed live.** With the rule correctly built against `5503`, `wazuh-logtest` confirmed it firing on the third submission of the real log line.
+
+![Sudo/privilege-escalation rule validation](screenshots/sudo-rule-validation.png)
+
+A genuine live test — three real failed `sudo` authentication attempts — triggered rule `100011` for real, captured in `sudo_privesc_detection_evidence.json`.
+
+![Live privilege-escalation alert confirmation](screenshots/live-alert-confirmation.png)
 
 ### Key finding
 
@@ -167,6 +170,8 @@ Rather than a blanket "gap analysis" against the full ATT&CK matrix — which ev
 - **T1078 — Valid Accounts.** Planned: detect a successful authentication immediately following a failed-attempt streak, or authentication at unusual hours — different rule logic than rule 100010's frequency-threshold approach to the same log source.
 - **T1098 — Account Manipulation.** Planned: detect Linux-side group membership changes (e.g. `usermod -aG sudo`) via `auth.log`.
 
+![MITRE ATT&CK Navigator coverage and roadmap heatmap](screenshots/mitre-navigator-coverage-heatmap.png)
+
 ### Key finding
 
 A coverage layer alone shows what's proven. Pairing it with a small, deliberately curated set of "planned next" techniques — grounded in what the existing log sources can actually support, not a generic wishlist — turns the same artifact into a prioritization tool: an honest answer to "what would you build next, and why," rather than just a scorecard of what's already done. The layer is also a living artifact by design — as new rules get added, it gets reopened and extended rather than rebuilt from scratch.
@@ -184,6 +189,8 @@ Two custom visualization panels, hand-built directly in the Wazuh dashboard's ow
 **Alert Volume Over Time** — a vertical bar chart, filtered to `rule.id:(100010 OR 100011)`, bucketed on `@timestamp` via a date histogram. Deliberately scoped to July 20 – August 1, 2026, matching this repo's own documented attack window. A separate, later live-fire SSH brute-force run — built for a different portfolio piece, against a different target account — also happens to trip rule 100010, and including it would have made this panel's totals diverge from the counts already documented earlier in this README. Excluding it was a deliberate scoping decision, not an oversight.
 
 **Top Source IPs by Alert Count** — a data table, using a Terms aggregation on `data.srcip` with "show missing values" enabled. Result: `192.168.81.128` with 23 hits, plus a `Missing` row with 1 hit.
+
+![Custom Wazuh dashboard: alert volume and source IP panels](screenshots/wazuh-custom-dashboard.png)
 
 ### A real finding: what the "Missing" count actually means
 
