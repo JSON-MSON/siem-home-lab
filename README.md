@@ -146,22 +146,24 @@ A portable, re-usable coverage layer mapping this lab's real, validated detectio
 
 ### Coverage layer — what's actually detected
 
-Two techniques, each backed by a specific rule ID and a live-fire confirmation already documented above, not by assertion:
+Three techniques, each backed by a specific rule ID and a live-fire confirmation already documented above, not by assertion:
 
 | Technique | Rule | Confirmed via |
 |---|---|---|
 | T1110 — Brute Force | 100010 (base SID 5760) | live Hydra SSH brute-force attack |
 | T1548 — Abuse Elevation Control Mechanism | 100011 (base SID 5503) | live repeated failed sudo/PAM attempts |
+| T1685.006 — Disable or Modify Tools: Clear Linux or Mac System Logs | 550 | live FIM detection during the real authentication-log-tampering incident, documented in `incident-reports` |
 
 ### A real framework-version finding along the way
 
-Building the layer surfaced a genuine, current ATT&CK change: version 19 (released April 2026) split the former "Defense Evasion" tactic into two new tactics, Stealth and Defense Impairment. One of the roadmap techniques below — clearing system logs — was revoked from its old ID (T1070.002, under the old Defense Evasion framing) and reissued as **T1685.006 ("Disable or Modify Tools: Clear Linux or Mac System Logs")** under the new Defense Impairment tactic. The reframing is meaningful, not just a renumbering: MITRE's rationale is that clearing logs isn't just about *evading* detection while defenses keep running — it's about *actively degrading* a defensive control. That's a more accurate description of what a Wazuh FIM rule watching for log tampering would actually be catching.
+Building the layer surfaced a genuine, current ATT&CK change: version 19 (released April 2026) split the former "Defense Evasion" tactic into two new tactics, Stealth and Defense Impairment. One technique — clearing system logs — was revoked from its old ID (T1070.002, under the old Defense Evasion framing) and reissued as **T1685.006 ("Disable or Modify Tools: Clear Linux or Mac System Logs")** under the new Defense Impairment tactic. The reframing is meaningful, not just a renumbering: MITRE's rationale is that clearing logs isn't just about *evading* detection while defenses keep running — it's about *actively degrading* a defensive control. That's a more accurate description of what a Wazuh FIM rule watching for log tampering would actually be catching.
+
+This technique started as a roadmap item — a planned Wazuh FIM rule watching `/var/log/auth.log` for tampering. It's since moved into the coverage layer above: the real authentication-log-tampering incident documented in `incident-reports` fired rule 550 against exactly this technique, with real evidence (hash and size changes on the tampered file), not a synthetic test.
 
 ### Roadmap layer — honest, infrastructure-grounded next steps
 
-Rather than a blanket "gap analysis" against the full ATT&CK matrix — which every home lab trivially fails and which proves nothing on its own — the layer marks three specific techniques chosen because they're detectable using log sources Wazuh already ingests from this host, with no new infrastructure required:
+Rather than a blanket "gap analysis" against the full ATT&CK matrix — which every home lab trivially fails and which proves nothing on its own — the layer marks two specific techniques chosen because they're detectable using log sources Wazuh already ingests from this host, with no new infrastructure required:
 
-- **T1685.006 — Clear Linux or Mac System Logs.** Planned: Wazuh File Integrity Monitoring watching `/var/log/auth.log` for tampering or unexpected truncation.
 - **T1078 — Valid Accounts.** Planned: detect a successful authentication immediately following a failed-attempt streak, or authentication at unusual hours — different rule logic than rule 100010's frequency-threshold approach to the same log source.
 - **T1098 — Account Manipulation.** Planned: detect Linux-side group membership changes (e.g. `usermod -aG sudo`) via `auth.log`.
 
