@@ -151,13 +151,13 @@ Three techniques, each backed by a specific rule ID and a live-fire confirmation
 |---|---|---|
 | T1110 — Brute Force | 100010 (base SID 5760) | live Hydra SSH brute-force attack |
 | T1548 — Abuse Elevation Control Mechanism | 100011 (base SID 5503) | live repeated failed sudo/PAM attempts |
-| T1685.006 — Disable or Modify Tools: Clear Linux or Mac System Logs | 550 | live FIM detection during the real authentication-log-tampering incident, documented in `incident-reports` |
+| T1685.006 — Disable or Modify Tools: Clear Linux or Mac System Logs | 550 | live FIM detection during the real authentication-log-tampering incident, documented in [`incident-reports`](https://github.com/JSON-MSON/incident-reports) |
 
 ### A real framework-version finding along the way
 
 Building the layer surfaced a genuine, current ATT&CK change: version 19 (released April 2026) split the former "Defense Evasion" tactic into two new tactics, Stealth and Defense Impairment. One technique — clearing system logs — was revoked from its old ID (T1070.002, under the old Defense Evasion framing) and reissued as **T1685.006 ("Disable or Modify Tools: Clear Linux or Mac System Logs")** under the new Defense Impairment tactic. The reframing is meaningful, not just a renumbering: MITRE's rationale is that clearing logs isn't just about *evading* detection while defenses keep running — it's about *actively degrading* a defensive control. That's a more accurate description of what a Wazuh FIM rule watching for log tampering would actually be catching.
 
-This technique started as a roadmap item — a planned Wazuh FIM rule watching `/var/log/auth.log` for tampering. It's since moved into the coverage layer above: the real authentication-log-tampering incident documented in `incident-reports` fired rule 550 against exactly this technique, with real evidence (hash and size changes on the tampered file), not a synthetic test.
+This technique started as a roadmap item — a planned Wazuh FIM rule watching `/var/log/auth.log` for tampering. It's since moved into the coverage layer above: the real authentication-log-tampering incident documented in [`incident-reports`](https://github.com/JSON-MSON/incident-reports) fired rule 550 against exactly this technique, with real evidence (hash and size changes on the tampered file), not a synthetic test.
 
 ### Roadmap layer — honest, infrastructure-grounded next steps
 
