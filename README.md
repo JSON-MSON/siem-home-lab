@@ -49,10 +49,10 @@ This rule escalates repeated SSH authentication failures from the same source IP
 
 ### 4. Debug it — the rule didn't fire on the first attempt
 
-A live Hydra run produced 206 alert hits, but none of them were the custom rule — they were a different, unrelated built-in Wazuh rule. Rather than assume the rule was broken and guess at a fix, it was validated directly with `wazuh-logtest` against a known sample log line, which surfaced two real, distinct bugs:
+A live Hydra run produced alert hits from several built-in Wazuh rules, but none from the custom rule. Rather than assume the rule was broken and guess at a fix, it was validated directly with `wazuh-logtest` against a known sample log line, which surfaced two real, distinct bugs:
 
 - **Missing `frequency`/`timeframe` attributes.** `<if_matched_sid>` requires these on the `<rule>` tag itself to define a countable time window — without them, the rule has no actual evaluation logic and silently never fires, regardless of how correct everything else looks.
-- **Wrong base rule ID.** The rule was written to watch for occurrences of rule `5716`, but `wazuh-logtest` showed this specific log format actually decodes to rule `5760` on this Wazuh version — a one-digit-off assumption that would have made the rule permanently blind, even with the frequency/timeframe fix in place.
+- **Wrong base rule ID.** The rule was written against a base rule ID assumed rather than checked, but `wazuh-logtest` showed this specific log format actually decodes to rule `5760` on this Wazuh version — an assumption that would have made the rule permanently blind, even with the frequency/timeframe fix in place.
 
 ### 5. Validate the fix directly, before re-attacking
 
@@ -70,7 +70,7 @@ The same sample line, submitted four times (matching the `frequency="4"` thresho
 ```bash
 hydra -t 4 -l codemane1 -P /usr/share/wordlists/rockyou.txt ssh://192.168.81.130
 ```
-(`-t 4` limits parallel connections — OpenSSH's own `PerSourcePenalties` defense started dropping connections from the attacker under Hydra's default 16-thread setting, a real SSH hardening feature worth noting in its own right.)
+(`-t 4` limits parallel connections. OpenSSH enables [`PerSourcePenalties`](https://www.openwall.com/lists/oss-security/2024/07/01/1) by default from version 9.8 onward, penalising source addresses that repeatedly fail to authenticate — so a high thread count works against itself here. This target runs OpenSSH 10.2p1.)
 
 Result: rule `100010` fired 23 times against the real attack traffic, correctly attributing the source IP (`192.168.81.128`) and citing MITRE technique T1110.
 
@@ -84,7 +84,7 @@ A detection rule that "looks correct" and a detection rule that actually fires a
 
 - `wazuh_detection_evidence.json` — the real alert record from the live Hydra-triggered detection, including `firedtimes`, source IP, and MITRE mapping
 - `sudo_privesc_detection_evidence.json` — the real alert record from the live privilege-escalation detection (see addendum below)
-- `mitre_navigator_coverage_layer.json` — exported MITRE ATT&CK Navigator layer covering both confirmed detections plus a curated set of planned next detections, each with a citation comment (see addendum below)
+- `mitre_navigator_coverage_layer.json` — exported MITRE ATT&CK Navigator layer covering all three confirmed detections plus a curated set of planned next detections, each with a citation comment (see addendum below)
 - `wazuh_dashboard_saved_objects.ndjson` — exported OpenSearch Dashboards saved-objects file for the custom detection dashboard, re-importable into any Wazuh instance (see addendum below)
 - `screenshots/` — terminal and dashboard captures, placed inline throughout this README next to the step each one documents, rather than grouped separately
 
@@ -186,7 +186,7 @@ Two custom visualization panels, hand-built directly in the Wazuh dashboard's ow
 
 ### The panels
 
-**Alert Volume Over Time** — a vertical bar chart, filtered to `rule.id:(100010 OR 100011)`, bucketed on `@timestamp` via a date histogram. Deliberately scoped to July 20 – August 1, 2026, matching this repo's own documented attack window. A separate, later live-fire SSH brute-force run — built for a different portfolio piece, against a different target account — also happens to trip rule 100010, and including it would have made this panel's totals diverge from the counts already documented earlier in this README. Excluding it was a deliberate scoping decision, not an oversight.
+**Alert Volume Over Time** — a vertical bar chart, filtered to `rule.id:(100010 OR 100011)`, bucketed on `timestamp` via a date histogram. Deliberately scoped to July 20 – August 1, 2026, matching this repo's own documented attack window. A separate, later live-fire SSH brute-force run — built for a different portfolio piece, against a different target account — also happens to trip rule 100010, and including it would have made this panel's totals diverge from the counts already documented earlier in this README. Excluding it was a deliberate scoping decision, not an oversight.
 
 **Top Source IPs by Alert Count** — a data table, using a Terms aggregation on `data.srcip` with "show missing values" enabled. Result: `192.168.81.128` with 23 hits, plus a `Missing` row with 1 hit.
 
