@@ -11,18 +11,23 @@ Building and validating a real custom SIEM detection rule — not just installin
 - **Attacker:** Kali Linux VM, same isolated lab network
 - **Attack tool:** Hydra, SSH credential brute-forcing
 
+## Key findings
+
+Four things this project established, each backed by evidence in the sections below.
+
+**A rule that looks correct and a rule that actually fires are two different things.** Two independent bugs — a missing frequency/timeframe pairing and an incorrect base rule ID — both had to be found before the first rule caught anything, and neither would have been obvious going straight to a live attack. The discipline is validating logic in isolation first, then confirming against real traffic.
+
+**Validating against a synthetic test line can validate the wrong thing.** The second rule passed `wazuh-logtest` while still being wrong, because the hand-written test input did not match the format real `sudo` failures produce. The standard is not "trust `wazuh-logtest`" but "trust `wazuh-logtest` run against genuinely real data" — meaningfully stricter than it first appears.
+
+**A coverage layer paired with a curated roadmap is a prioritization tool, not a scorecard.** Showing what is proven alongside a small set of planned next techniques — grounded in what the existing log sources can actually support rather than a generic wishlist — answers "what would you build next, and why." The layer is extended as rules are added rather than rebuilt.
+
+**A frequency-based rule's alert count reflects triggered thresholds, not raw events.** That distinction matters when reconciling a dashboard against a written incident record. Building the panels also showed how easily cross-project alert data bleeds into a filtered view when the time range is not scoped deliberately.
+
 ## Process
 
-### 1. Confirm the manager monitors itself
+### 1. Set up log ingestion
 
-Wazuh managers automatically include a built-in local agent (ID `000`) that reads the host's own logs — a standalone `wazuh-agent` package cannot be installed alongside `wazuh-manager` on the same machine; the package manager itself blocks it as a conflict, since it isn't necessary.
-
-```bash
-sudo /var/ossec/bin/agent_control -l
-```
-Confirmed: `ID: 000, Name: ubuntu-target (server), IP: 127.0.0.1, Active/Local`
-
-### 2. Add the authentication log as a monitored source
+A Wazuh manager includes a built-in local agent (ID `000`) that reads the host's own logs, so no separate agent package is needed on the manager itself. The authentication log is added as a monitored source in `/var/ossec/etc/ossec.conf`, alongside the manager's existing defaults:
 
 ```xml
 <localfile>
@@ -30,9 +35,10 @@ Confirmed: `ID: 000, Name: ubuntu-target (server), IP: 127.0.0.1, Active/Local`
   <location>/var/log/auth.log</location>
 </localfile>
 ```
-Added to `/var/ossec/etc/ossec.conf`, alongside the manager's existing default sources.
 
-### 3. Write a custom detection rule for SSH brute-force attempts
+This is the ingestion basis for both detection rules below — without it, neither rule has anything to match against.
+
+### 2. Write a custom detection rule for SSH brute-force attempts
 
 ```xml
 <rule id="100010" level="10" frequency="4" timeframe="120">
@@ -47,14 +53,14 @@ Added to `/var/ossec/etc/ossec.conf`, alongside the manager's existing default s
 
 This rule escalates repeated SSH authentication failures from the same source IP into a labeled brute-force alert, mapped to MITRE ATT&CK technique **T1110 (Brute Force)**.
 
-### 4. Debug it — the rule didn't fire on the first attempt
+### 3. Debug it — the rule didn't fire on the first attempt
 
 A live Hydra run produced alert hits from several built-in Wazuh rules, but none from the custom rule. Rather than assume the rule was broken and guess at a fix, it was validated directly with `wazuh-logtest` against a known sample log line, which surfaced two real, distinct bugs:
 
 - **Missing `frequency`/`timeframe` attributes.** `<if_matched_sid>` requires these on the `<rule>` tag itself to define a countable time window — without them, the rule has no actual evaluation logic and silently never fires, regardless of how correct everything else looks.
 - **Wrong base rule ID.** The rule was written against a base rule ID assumed rather than checked, but `wazuh-logtest` showed this specific log format actually decodes to rule `5760` on this Wazuh version — an assumption that would have made the rule permanently blind, even with the frequency/timeframe fix in place.
 
-### 5. Validate the fix directly, before re-attacking
+### 4. Validate the fix directly, before re-attacking
 
 ![Corrected detection rule configuration](screenshots/local-rules-config.png)
 
@@ -65,7 +71,7 @@ The same sample line, submitted four times (matching the `frequency="4"` thresho
 
 ![Rule validation via wazuh-logtest](screenshots/rule-validation.png)
 
-### 6. Confirm with a real attack
+### 5. Confirm with a real attack
 
 ```bash
 hydra -t 4 -l codemane1 -P /usr/share/wordlists/rockyou.txt ssh://192.168.81.130
@@ -75,10 +81,6 @@ hydra -t 4 -l codemane1 -P /usr/share/wordlists/rockyou.txt ssh://192.168.81.130
 Result: rule `100010` fired 23 times against the real attack traffic, correctly attributing the source IP (`192.168.81.128`) and citing MITRE technique T1110.
 
 ![Live alert in the Wazuh dashboard](screenshots/dashboard-alert.png)
-
-## Key finding
-
-A detection rule that "looks correct" and a detection rule that actually fires are two different things. Two independent, specific bugs — a missing frequency/timeframe pairing and an incorrect base rule ID — both had to be found and fixed before this rule caught anything, and neither would have been obvious without testing against `wazuh-logtest` first rather than going straight to a live attack. This is the actual discipline behind detection engineering: validate the logic in isolation, then confirm against real traffic — not the other way around.
 
 ## Files in this repo
 
@@ -135,12 +137,6 @@ A genuine live test — three real failed `sudo` authentication attempts — tri
 
 ![Live privilege-escalation alert confirmation](screenshots/live-alert-confirmation.png)
 
-### Key finding
-
-Every one of the first rule's lessons (validate before attacking, don't assume a base rule ID) held up as generally correct — but this rule's own process surfaced a further, more subtle version of the same failure mode: a synthetic test input can pass validation while still being validated against the *wrong thing*. The fix isn't "trust `wazuh-logtest`" — it's "trust `wazuh-logtest` run against genuinely real data," which is a meaningfully stricter standard than it first appears.
-
----
-
 ## Addendum: MITRE ATT&CK Navigator Detection Coverage Layer
 
 ### What this adds
@@ -172,12 +168,6 @@ Rather than a blanket "gap analysis" against the full ATT&CK matrix — which ev
 
 ![MITRE ATT&CK Navigator coverage and roadmap heatmap](screenshots/mitre-navigator-coverage-heatmap.png)
 
-### Key finding
-
-A coverage layer alone shows what's proven. Pairing it with a small, deliberately curated set of "planned next" techniques — grounded in what the existing log sources can actually support, not a generic wishlist — turns the same artifact into a prioritization tool: an honest answer to "what would you build next, and why," rather than just a scorecard of what's already done. The layer is also a living artifact by design — as new rules get added, it gets reopened and extended rather than rebuilt from scratch.
-
----
-
 ## Addendum: Custom Wazuh Dashboard Panels
 
 ### What this adds
@@ -196,6 +186,3 @@ Two custom visualization panels, hand-built directly in the Wazuh dashboard's ow
 
 The `sudo`/PAM rule (100011) carries no source-IP field by design — a local privilege-escalation attempt has no remote source address to log — so it was expected to land in the `Missing` bucket rather than under an IP. What needed a second look was the count itself: `Missing` shows **1**, not the 3 individual failed attempts documented in the addendum above. That's not a discrepancy — rule 100011 has `frequency="3"`, meaning it evaluates a *threshold* being crossed and emits exactly one alert document when it's met, not one alert per underlying failed attempt. The three real failures are the trigger condition; the alert is the single, resulting record. Total across both panels: 23 + 1 = 24 alert documents, which is exactly correct once counted this way.
 
-### Key finding
-
-A functioning custom dashboard built entirely from real, live alert data — evidence of working inside an actual SIEM's visualization tooling, not just its rule engine. Building it also surfaced two things worth being deliberate about with real data: cross-project alert data can silently bleed into a filtered view if the time range isn't scoped carefully, and a frequency-based rule's alert count reflects *triggered thresholds*, not *raw events* — a distinction that matters when reconciling a dashboard's numbers against a written incident record.
