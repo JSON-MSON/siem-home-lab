@@ -1,0 +1,59 @@
+# Rule 100011 on Ubuntu Server, July 28, 2026: the rule built on base rule 5404, its removal, the manager outage the removal caused, and the fix.
+# The removal (13:47:57 UTC) left an empty <group> block. The restart at 13:48:33 failed at 13:48:35 ("Group 'group' without any rule"); the manager stayed down until the block was removed (13:52:02) and it was restarted (13:53:23), and was running again at 13:53:32.
+
+# 1. From the shell history (read October 2, 2026; no timestamps — the first rule was written at 13:33:47 UTC and the rule on 5503 at 13:48:21, per the sudo log):
+sudo tee -a /var/ossec/etc/rules/local_rules.xml > /dev/null << 'EOF'
+<group name="local,syslog,sudo,">
+  <rule id="100011" level="10" frequency="3" timeframe="120">
+    <if_matched_sid>5404</if_matched_sid>
+    <description>Repeated failed sudo attempts - possible privilege escalation attempt (T1548)</description>
+    <mitre>
+      <id>T1548</id>
+    </mitre>
+  </rule>
+</group>
+EOF
+…
+sudo sed -i '/<rule id="100011"/,/<\/rule>/d' /var/ossec/etc/rules/local_rules.xml
+…
+sudo tee -a /var/ossec/etc/rules/local_rules.xml > /dev/null << 'EOF'
+<group name="local,syslog,sudo,">
+  <rule id="100011" level="10" frequency="3" timeframe="120">
+    <if_matched_sid>5503</if_matched_sid>
+    <description>Repeated failed sudo/PAM authentication - possible privilege escalation attempt (T1548)</description>
+    <mitre>
+      <id>T1548</id>
+    </mitre>
+  </rule>
+</group>
+EOF
+…
+sudo sed -i '/<group name="local,syslog,sudo,">$/{N;/<group name="local,syslog,sudo,">\n<\/group>/d}' /var/ossec/etc/rules/local_rules.xml
+
+# 2. Commands run with sudo from 13:47 to 13:54 UTC, from the systemd journal (read October 2, 2026):
+$ sudo journalctl _COMM=sudo --since "2026-07-28 13:47:00" --until "2026-07-28 13:54:00" --no-pager -o short-iso-precise | grep COMMAND=
+2026-07-28T13:47:57.150795+00:00 ubuntu-target sudo[7483]: labadmin : TTY=/dev/pts/0 ; PWD=/home/labadmin ; USER=root ; COMMAND=/usr/bin/sed -i /<rule id=\"100011\"/,/<\\/rule>/d /var/ossec/etc/rules/local_rules.xml
+2026-07-28T13:48:06.917031+00:00 ubuntu-target sudo[7496]: labadmin : TTY=/dev/pts/0 ; PWD=/home/labadmin ; USER=root ; COMMAND=/usr/bin/grep -A5 100011 /var/ossec/etc/rules/local_rules.xml
+2026-07-28T13:48:21.031407+00:00 ubuntu-target sudo[7509]: labadmin :  PWD=/home/labadmin ; USER=root ; COMMAND=/usr/bin/tee -a /var/ossec/etc/rules/local_rules.xml
+2026-07-28T13:48:33.684868+00:00 ubuntu-target sudo[7523]: labadmin : TTY=/dev/pts/0 ; PWD=/home/labadmin ; USER=root ; COMMAND=/usr/bin/systemctl restart wazuh-manager
+2026-07-28T13:48:35.398550+00:00 ubuntu-target sudo[7667]: labadmin : TTY=/dev/pts/0 ; PWD=/home/labadmin ; USER=root ; COMMAND=/var/ossec/bin/wazuh-logtest
+2026-07-28T13:49:45.465867+00:00 ubuntu-target sudo[7700]: labadmin : TTY=/dev/pts/0 ; PWD=/home/labadmin ; USER=root ; COMMAND=/usr/bin/systemctl status wazuh-manager
+2026-07-28T13:50:56.819468+00:00 ubuntu-target sudo[7722]: labadmin : TTY=/dev/pts/0 ; PWD=/home/labadmin ; USER=root ; COMMAND=/usr/bin/cat /var/ossec/etc/rules/local_rules.xml
+2026-07-28T13:52:02.667405+00:00 ubuntu-target sudo[7737]: labadmin : TTY=/dev/pts/0 ; PWD=/home/labadmin ; USER=root ; COMMAND=/usr/bin/sed -i /<group name=\"local,syslog,sudo,\">$/{N;/<group name=\"local,syslog,sudo,\">\\n<\\/group>/d} /var/ossec/etc/rules/local_rules.xml
+2026-07-28T13:52:26.490647+00:00 ubuntu-target sudo[7750]: labadmin : TTY=/dev/pts/0 ; PWD=/home/labadmin ; USER=root ; COMMAND=/usr/bin/cat /var/ossec/etc/rules/local_rules.xml
+2026-07-28T13:53:23.489202+00:00 ubuntu-target sudo[7782]: labadmin : TTY=/dev/pts/0 ; PWD=/home/labadmin ; USER=root ; COMMAND=/usr/bin/systemctl restart wazuh-manager
+2026-07-28T13:53:32.427500+00:00 ubuntu-target sudo[9016]: labadmin : TTY=/dev/pts/0 ; PWD=/home/labadmin ; USER=root ; COMMAND=/usr/bin/systemctl status wazuh-manager
+
+# 3. The manager's own journal for the same period (read October 2, 2026; '…' marks the 13:48:33 stop sequence and the rest of the 13:53 start sequence):
+$ journalctl -u wazuh-manager --since "2026-07-28 13:40" --until "2026-07-28 14:00" --no-pager -o short-iso
+…
+2026-07-28T13:48:34+00:00 ubuntu-target systemd[1]: Starting wazuh-manager.service - Wazuh manager...
+2026-07-28T13:48:35+00:00 ubuntu-target env[7656]: 2026/07/28 13:48:35 wazuh-analysisd: ERROR: Group 'group' without any rule.
+2026-07-28T13:48:35+00:00 ubuntu-target env[7656]: 2026/07/28 13:48:35 wazuh-analysisd: CRITICAL: (1220): Error loading the rules: 'etc/rules/local_rules.xml'.
+2026-07-28T13:48:35+00:00 ubuntu-target env[7625]: wazuh-analysisd: Configuration error. Exiting
+2026-07-28T13:48:35+00:00 ubuntu-target systemd[1]: wazuh-manager.service: Control process exited, code=exited, status=1/FAILURE
+2026-07-28T13:48:35+00:00 ubuntu-target systemd[1]: wazuh-manager.service: Failed with result 'exit-code'.
+2026-07-28T13:48:35+00:00 ubuntu-target systemd[1]: Failed to start wazuh-manager.service - Wazuh manager.
+2026-07-28T13:53:23+00:00 ubuntu-target systemd[1]: Starting wazuh-manager.service - Wazuh manager...
+…
+2026-07-28T13:53:32+00:00 ubuntu-target systemd[1]: Started wazuh-manager.service - Wazuh manager.

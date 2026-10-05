@@ -1,0 +1,51 @@
+# Rule counts from the Wazuh manager's archived alert logs before each custom rule was fixed: July 24, 2026 (rule 100010) and July 28, 2026 (rule 100011).
+# Read on October 2, 2026 from /var/ossec/logs/alerts/2026/Jul/ on Ubuntu Server with the script below; these counts were not captured at the time.
+# Block 1: alerts whose source address is Kali Linux, July 24, 19:25–20:09 UTC. The window spans three loaded versions of rule 100010 (manager restarts at 19:14:34, 20:01:04 and 20:03:23 UTC); the corrected rule loaded at the 20:09:19 restart, and the first rule 100010 alert of the day followed at 20:12:22.952.
+# Block 2: every alert on July 28, 13:28–13:48 UTC. Rule 100011 built on base rule 5404 was written at 13:33:47 UTC and loaded at the manager restart at 13:34:24 (rule 502); it was deleted at 13:47:57 (rule-100011-history.txt). Rules 5503 and 5557 are the alerts for the failed sudo attempts in this window; no alert matched 5404 or 100011.
+
+# Script run as root on Ubuntu Server:
+cat > /tmp/hl01_alerts2.py <<'PY'
+import json
+from collections import Counter
+def rd(p):
+    with open(p, errors="replace") as f:
+        for l in f:
+            try: yield json.loads(l)
+            except Exception: pass
+A = "/var/ossec/logs/alerts/2026/"
+first = None; c = Counter()
+for a in rd(A + "Jul/ossec-alerts-24.json"):
+    ts = a["timestamp"][:19]; rid = a["rule"]["id"]
+    if rid == "100010" and first is None: first = a["timestamp"]
+    if "2026-07-24T19:25:00" <= ts < "2026-07-24T20:09:00" and a.get("data", {}).get("srcip") == "198.51.100.128":
+        c[(rid, a["rule"].get("description"))] += 1
+print("## Jul 24 first rule 100010 alert of the day:", first)
+print("## Jul 24 rules fired by 198.51.100.128 between 19:25 and 20:09 (before the fixed rule loaded)")
+for k, v in sorted(c.items()): print(k, v)
+c2 = Counter()
+for a in rd(A + "Jul/ossec-alerts-28.json"):
+    ts = a["timestamp"][:19]
+    if "2026-07-28T13:28:00" <= ts <= "2026-07-28T13:48:00": c2[(a["rule"]["id"], a["rule"].get("description"))] += 1
+print("## Jul 28 rules fired 13:28-13:48")
+for k, v in sorted(c2.items()): print(k, v)
+PY
+
+$ sudo python3 /tmp/hl01_alerts2.py
+## Jul 24 first rule 100010 alert of the day: 2026-07-24T20:12:22.952+0000
+## Jul 24 rules fired by 198.51.100.128 between 19:25 and 20:09 (before the fixed rule loaded)
+('2502', 'syslog: User missed the password more than one time') 39
+('40111', 'Multiple authentication failures.') 10
+('5503', 'PAM: User login failed.') 44
+('5551', 'PAM: Multiple failed logins in a small period of time.') 5
+('5758', 'Maximum authentication attempts exceeded.') 42
+('5760', 'sshd: authentication failed.') 274
+('5763', 'sshd: brute force trying to get access to the system. Authentication failed.') 2
+## Jul 28 rules fired 13:28-13:48
+('502', 'Wazuh server started.') 1
+('510', 'Host-based anomaly detection event (rootcheck).') 20
+('5402', 'Successful sudo to ROOT executed.') 22
+('5501', 'PAM: Login session opened.') 24
+('5502', 'PAM: Login session closed.') 24
+('5503', 'PAM: User login failed.') 2
+('5557', 'unix_chkpwd: Password check failed.') 6
+('5715', 'sshd: authentication success.') 2

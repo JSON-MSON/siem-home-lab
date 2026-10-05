@@ -1,0 +1,68 @@
+# wazuh-logtest re-test of a rule written without frequency or timeframe, run on Ubuntu Server on September 30, 2026 — a later test, not part of the July 24 build.
+# A throwaway rule (100099: base rule 5760, same_source_ip, no frequency or timeframe) was written to its own file, the same real failed-password line was submitted three times, and the file was then removed.
+# Result: the first submission matches only rule 5760; the second and third fire rule 100099, which reports frequency '2' — Wazuh's default of two matching events.
+# The default timeframe of 360 seconds does not appear in this output; it is analysisd.default_timeframe=360 in Wazuh 4.14's etc/internal_options.conf.
+# The submitted line is line 1221 of log-ioc-parser's auth_snapshot.log. For each submission only the full event and Phase 3 (rule matching) are kept; '…' marks the omitted Phase 1 and Phase 2 lines.
+
+# 1. Commands, from Ubuntu Server's shell history:
+sudo tee /var/ossec/etc/rules/zz_test_nofreq.xml > /dev/null <<'EOF'
+<group name="test_nofreq,">
+  <rule id="100099" level="10">
+    <if_matched_sid>5760</if_matched_sid>
+    <same_source_ip />
+    <description>TEST ONLY - if_matched_sid without frequency/timeframe</description>
+  </rule>
+</group>
+EOF
+printf '%s\n' "2026-07-24T20:12:22.450511+00:00 ubuntu-target sshd-session[20192]: Failed password for labadmin from 198.51.100.128 port 45892 ssh2" "2026-07-24T20:12:22.450511+00:00 ubuntu-target sshd-session[20192]: Failed password for labadmin from 198.51.100.128 port 45892 ssh2" "2026-07-24T20:12:22.450511+00:00 ubuntu-target sshd-session[20192]: Failed password for labadmin from 198.51.100.128 port 45892 ssh2" | sudo /var/ossec/bin/wazuh-logtest 2>&1 | tee ~/logtest-nofreq-2026-09-30.txt
+sudo rm /var/ossec/etc/rules/zz_test_nofreq.xml && sudo ls -la /var/ossec/etc/rules/
+
+# 2. Output (~/logtest-nofreq-2026-09-30.txt):
+Starting wazuh-logtest v4.14.<version>
+…
+**Phase 1: Completed pre-decoding.
+	full event: '2026-07-24T20:12:22.450511+00:00 ubuntu-target sshd-session[20192]: Failed password for labadmin from 198.51.100.128 port 45892 ssh2'
+…
+**Phase 3: Completed filtering (rules).
+	id: '5760'
+	level: '5'
+	description: 'sshd: authentication failed.'
+	groups: '['syslog', 'sshd', 'authentication_failed']'
+	firedtimes: '1'
+	gdpr: '['IV_35.7.d', 'IV_32.2']'
+	gpg13: '['7.1']'
+	hipaa: '['164.312.b']'
+	mail: 'False'
+	mitre.id: '['T1110.001', 'T1021.004']'
+	mitre.tactic: '['Credential Access', 'Lateral Movement']'
+	mitre.technique: '['Password Guessing', 'SSH']'
+	nist_800_53: '['AU.14', 'AC.7']'
+	pci_dss: '['10.2.4', '10.2.5']'
+	tsc: '['CC6.1', 'CC6.8', 'CC7.2', 'CC7.3']'
+**Alert to be generated.
+…
+**Phase 1: Completed pre-decoding.
+	full event: '2026-07-24T20:12:22.450511+00:00 ubuntu-target sshd-session[20192]: Failed password for labadmin from 198.51.100.128 port 45892 ssh2'
+…
+**Phase 3: Completed filtering (rules).
+	id: '100099'
+	level: '10'
+	description: 'TEST ONLY - if_matched_sid without frequency/timeframe'
+	groups: '['test_nofreq']'
+	firedtimes: '1'
+	frequency: '2'
+	mail: 'False'
+**Alert to be generated.
+…
+**Phase 1: Completed pre-decoding.
+	full event: '2026-07-24T20:12:22.450511+00:00 ubuntu-target sshd-session[20192]: Failed password for labadmin from 198.51.100.128 port 45892 ssh2'
+…
+**Phase 3: Completed filtering (rules).
+	id: '100099'
+	level: '10'
+	description: 'TEST ONLY - if_matched_sid without frequency/timeframe'
+	groups: '['test_nofreq']'
+	firedtimes: '2'
+	frequency: '2'
+	mail: 'False'
+**Alert to be generated.

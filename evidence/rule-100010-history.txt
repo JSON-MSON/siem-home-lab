@@ -1,0 +1,20 @@
+# Rule 100010 as first written, and the change of its base rule, from Ubuntu Server's shell history (read October 2, 2026).
+# As first written, the rule has base rule 5716 and no frequency or timeframe attribute. The corrected rule is in the README (section 2) and screenshots/local-rules-config.png.
+# Shell history carries no timestamps and is not in time order across sessions. Times come from the server's sudo log, in log-ioc-parser's auth_snapshot.log: the edit in nano at 19:54:29 UTC (line 1176) and the sed below at 20:08:43 UTC (line 1200), July 24, 2026. What the nano edit changed was not recorded.
+
+# 1. The rule as first written:
+sudo tee -a /var/ossec/etc/rules/local_rules.xml > /dev/null << 'EOF'
+<group name="local,syslog,sshd,">
+  <rule id="100010" level="10">
+    <if_matched_sid>5716</if_matched_sid>
+    <same_source_ip />
+    <description>Multiple SSH authentication failures from same source - possible brute force (T1110)</description>
+    <mitre>
+      <id>T1110</id>
+    </mitre>
+  </rule>
+</group>
+EOF
+
+# 2. The base rule changed from 5716 to 5760:
+sudo sed -i 's/<if_matched_sid>5716<\/if_matched_sid>/<if_matched_sid>5760<\/if_matched_sid>/' /var/ossec/etc/rules/local_rules.xml
